@@ -1306,25 +1306,31 @@ def main():
 
         # 列出所有下一级文件夹
         subfolders = [f for f in folder_path.iterdir() if f.is_dir()]
+        RecordingSystemList = ['Intan','Stairplex']
         # 将所有文件夹的记录上传到原始数据表里
-        for subfolder in subfolders:
-            
-            ElectrodesList,_,recording_time = get_rhd_meta(subfolder)
-            RecordingSystem = 'Intan'
-            for j in range(len(ElectrodesList)):
-                _ = add_record2feishu(recording_time,RecordingSystem,ElectrodesList[j])
+        # for subfolder in subfolders:
+        #     #对于不同的记录系统
+        #     for RecordingSystem in RecordingSystemList:
+        #         try:
+        #             ElectrodesList,_,recording_time = get_recording_meta(subfolder,RecordingSystem)
+                    
+        #             for j in range(len(ElectrodesList)):
+        #                 _ = add_record2feishu(recording_time,RecordingSystem,ElectrodesList[j])
+        #         except:
+        #             pass
         print("开始进行数据分析...")
         for subfolder in subfolders:
             ##目前不需要用pad.jpg
-            if 0:#(subfolder/'pad.jpg').exists():
-                continue
-            else:
+             for RecordingSystem in RecordingSystemList:
+                print(subfolder)
+                ElectrodesList,_,recording_time = get_recording_meta(subfolder,'Intan')
                 with open(DateFolder / 'dairy.txt',"a") as f:
                     f.write('Begin to analyse' + subfolder.stem + ': ')
                     localtime = time.asctime(time.localtime(time.time()))
                     f.write(localtime + '\r\n')
                 try:
-                    single_rhd_file_analysis(subfolder)
+                    
+                    single_recording_file_analysis(subfolder)
 
                 except Exception as e:
                     traceback.format_exc()
@@ -1340,6 +1346,61 @@ def main():
         signal_handler(None, None)  #
    
         exit(0)
+                
+# def main():
+
+#     global_job_kwargs = dict(n_jobs=16,total_memory='64G', chunk_duration="500ms",max_threads_per_process=12,mp_context="spawn")
+#     # si.set_global_job_kwargs(**global_job_kwargs)
+#     try:
+ 
+
+#         print("请输入需要分析的日期文件夹名称（例：20241014）")
+        
+#         datefolder = input()
+
+#         DateFolder = Path(f"/mnt/nfs/TestData/{datefolder}")
+        
+#         # RecordingPath= Path(r"/mnt/nfs/TestData/20241013/TEST04&TEST06_241013_192159/")
+#         # ImpPath = Path(r"/mnt/nfs/TestData/20241013/impTEST04&TEST06.csv")
+    
+#         folder_path = Path(DateFolder)
+
+#         # 列出所有下一级文件夹
+#         subfolders = [f for f in folder_path.iterdir() if f.is_dir()]
+#         # 将所有文件夹的记录上传到原始数据表里
+#         # for subfolder in subfolders:
+            
+#         #     ElectrodesList,_,recording_time = get_recording_meta(subfolder,'Intan')
+#         #     RecordingSystem = 'Intan'
+#         #     for j in range(len(ElectrodesList)):
+#         #         _ = add_record2feishu(recording_time,RecordingSystem,ElectrodesList[j])
+#         print("开始进行数据分析...")
+#         RecordingSystemList = ['Intan','Stairplex']
+#         for subfolder in subfolders:
+#             ##目前不需要用pad.jpg
+#             for RecordingSystem in RecordingSystemList:
+            
+#                 with open(DateFolder / 'dairy.txt',"a") as f:
+#                     f.write('Begin to analyse' + subfolder.stem + ': ')
+#                     localtime = time.asctime(time.localtime(time.time()))
+#                     f.write(localtime + '\r\n')
+#                 try:
+#                     single_rhd_file_analysis(subfolder)
+
+#                 except Exception as e:
+#                     traceback.format_exc()
+                    
+
+#                     with open(DateFolder / 'dairy.txt', 'a') as f:
+#                         f.write(traceback.format_exc() + '\r\n')
+#                 signal_handler(None, None)
+#                 print("所有子进程处理完毕，主程序继续运行。") 
+
+#     except KeyboardInterrupt:
+#         print("捕获到 SIGINT，正在终止子进程...")
+#         signal_handler(None, None)  #
+   
+#         exit(0)
                 
 
 if __name__ == '__main__':

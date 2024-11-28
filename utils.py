@@ -32,7 +32,7 @@ import pymongo as pm
 import json
 import requests
 import traceback
-
+from sprInfo import SprInfo
 ## global parameters
 ChannelmapPath= Path('/home/stairmed/ProbeEvaluation/ChannelMap.xlsx')
 SSDPath = Path('/opt/tmp')
@@ -40,6 +40,7 @@ SSDPath = Path('/opt/tmp')
 br_th = 2e6
 sh_th = 5e4
 INTAN_CHANNELNUM = 128
+
 
 
 
@@ -476,29 +477,87 @@ def signal_handler(sig, frame):
 #     return  species, Probe_version,FPC_version
 
 
-# In[437]:
-
-
-lab = 'stairmed'
 
 
 # In[438]:
-
+def get_recording_system(RecordingPath):
+    RecordingSystem = 'Intan'
+    rhdFiles = list(RecordingPath.rglob('*.rhd*'))
+    if len(rhdFiles):
+        
+        RecordingSystem = 'Intan'
+    else:
+        binFiles = list(RecordingPath.rglob('*.spr*'))
+        if len(binFiles):
+            
+            RecordingSystem = 'Stairplex'
+        else:
+            print("没有找到.rhd 或.spr文件，请检查")
+    
+    return RecordingSystem
 
 def get_recording(RecordingPath):
+    RecordingSystem = get_recording_system(RecordingPath)
+    
+    if RecordingSystem == 'Intan':
+        rhdFiles = list(RecordingPath.rglob('*.rhd*'))
+        print(rhdFiles)
+        # recording = spikeinterface.extractors.read_binary(rhdFile, num_channels=128, 
+        #                                        time_axis=0, file_offset=0, is_filtered=None)
+        rhdFiles[0].stem
+        list_of_recordings = []
+        for file in rhdFiles:
+            list_of_recordings.append(se.read_intan(file, stream_id='0',use_names_as_ids=True,all_annotations=True,ignore_integrity_checks = True))
+        recording = si.concatenate_recordings(list_of_recordings)
+        recording = spre.unsigned_to_signed(recording=recording)
+        print(recording.annotate)
+        
+    elif RecordingSystem == 'Stairplex':
+        sprFiles = list(RecordingPath.rglob('*.spr*'))
+        if len(sprFiles):
+            list_of_recordings = []
+            for file in sprFiles:
+                count = 0
+                my_spr = SprInfo(file)
+                my_spr.save2bin('raw'+str(count)+'.bin')
+                
+                fs = my_spr.get_sample_rate()
+                
+                count = count+1
+                recording_single = spikeinterface.extractors.read_binary(my_spr.binfile, num_channels=128, 
+                                                                sampling_frequency=fs, dtype=np.int16,
+                                                time_axis=0, file_offset=0, is_filtered=None)
+                list_of_recordings.append(recording_single)
+            recording = si.concatenate_recordings(list_of_recordings)
+            recording.set_channel_gains(1)
+            recording.set_channel_offsets(0)
 
-    rhdFiles = list(RecordingPath.rglob('*.rhd*'))
-    print(rhdFiles)
-    # recording = spikeinterface.extractors.read_binary(rhdFile, num_channels=128, 
-    #                                        time_axis=0, file_offset=0, is_filtered=None)
-    rhdFiles[0].stem
-    list_of_recordings = []
-    for file in rhdFiles:
-        list_of_recordings.append(se.read_intan(file, stream_id='0',use_names_as_ids=True,all_annotations=True,ignore_integrity_checks = True))
-    recording = si.concatenate_recordings(list_of_recordings)
-    recording = spre.unsigned_to_signed(recording=recording)
-    print(recording.annotate)
-    return recording
+            print(recording.annotate)
+               
+    elif RecordingSystem == 'other':
+    
+        binFiles = list(RecordingPath.rglob('*.bin*'))
+        if len(binFiles):
+            list_of_recordings = []
+            for file in binFiles:
+                
+
+                recording_single = spikeinterface.extractors.read_binary(file, num_channels=128, 
+                                                                sampling_frequency=30000, dtype=np.int16,
+                                                time_axis=0, file_offset=0, is_filtered=None)
+                list_of_recordings.append(recording_single)
+            recording = si.concatenate_recordings(list_of_recordings)
+            recording.set_channel_gains(1)
+            recording.set_channel_offsets(0)
+
+            print(recording.annotate)
+            
+        else:
+            print("没有找到.rhd 或.spr文件，请检查")
+    
+    return recording,RecordingSystem
+
+
 
 
 
@@ -1035,19 +1094,19 @@ def set_unit_zero():
     return signal_dict
 # # Main
 
-
-### 读取单个rhd文件每个电极的meta数据，
-def get_rhd_meta(RecordingPath):
+### 读取单个recording文件每个电极的meta数据，包括.bin文件和RHD文件
+def get_recording_meta(RecordingPath,RecordingSystem):
+    rhdFiles = []
+    if RecordingSystem =='Intan':
+        rhdFiles = list(RecordingPath.rglob('*.rhd*'))
+        print(RecordingPath)
+        print(rhdFiles)
+        # recording = spikeinterface.extractors.read_binary(rhdFile, num_channels=128, 
+        #                                        time_axis=0, file_offset=0, is_filtered=None)
     
-    
-    rhdFiles = list(RecordingPath.rglob('*.rhd*'))
-    
-    print(rhdFiles)
-    # recording = spikeinterface.extractors.read_binary(rhdFile, num_channels=128, 
-    #                                        time_axis=0, file_offset=0, is_filtered=None)
-   
-   
-    
+    elif RecordingSystem =='Stairplex':
+        rhdFiles = list(RecordingPath.rglob('*.spr*'))
+    # rhdFiles = list(RecordingPath.rglob('*.rhd*'))
     Electrodes,RecordingTime = rhdFiles[0].stem.split('_',1)
    
     # translate time into 
@@ -1069,6 +1128,39 @@ def get_rhd_meta(RecordingPath):
     else:
         ElectrodesList = [Electrodes]
     return ElectrodesList,IMPD,recording_time
+### 读取单个rhd文件每个电极的meta数据，
+# def get_rhd_meta(RecordingPath):
+    
+    
+#     rhdFiles = list(RecordingPath.rglob('*.rhd*'))
+    
+#     print(rhdFiles)
+#     # recording = spikeinterface.extractors.read_binary(rhdFile, num_channels=128, 
+#     #                                        time_axis=0, file_offset=0, is_filtered=None)
+   
+   
+    
+#     Electrodes,RecordingTime = rhdFiles[0].stem.split('_',1)
+   
+#     # translate time into 
+#     tz_utc_8 = timezone(timedelta(hours=8))
+#     recording_time = datetime.strptime(RecordingTime, '%y%m%d_%H%M%S')
+#     recording_time.replace(tzinfo=tz_utc_8)
+    
+#     ##Impedance
+#      # impedance file
+#     DateFolder = RecordingPath.parent
+#     ImpPath = DateFolder / ('imp'+Electrodes+'.csv')
+#     # 阻抗信息：
+#     # IMPD = pd.read_csv(ImpPath,encoding='gbk')
+#     IMPD = pd.read_csv(ImpPath,encoding='UTF-8')
+    
+#     ## 从文件名判断有几个电极同时测试
+#     if Electrodes.count('&'):
+#         ElectrodesList = Electrodes.split('&')
+#     else:
+#         ElectrodesList = [Electrodes]
+#     return ElectrodesList,IMPD,recording_time
 
 # In[460]:
 
@@ -1078,9 +1170,15 @@ def single_electrode_analysis(RecordingPath,j):
 
     DateFolder = RecordingPath.parent
     print(RecordingPath)
-    rhdFiles = list(RecordingPath.rglob('*.rhd*'))
-    RecordingSystem = 'Intan'
-    print(rhdFiles)
+    
+    RecordingSystem = get_recording_system(RecordingPath)
+    if RecordingSystem == 'Intan':
+        rhdFiles = list(RecordingPath.rglob('*.rhd*'))
+        print(rhdFiles)
+    elif RecordingSystem == 'Stairplex':
+        rhdFiles = list(RecordingPath.rglob('*.spr*'))
+        print(rhdFiles)
+
     # recording = spikeinterface.extractors.read_binary(rhdFile, num_channels=128, 
     #                                        time_axis=0, file_offset=0, is_filtered=None)
     #在程序所在位置建立临时存储recording文件的位置，文件夹命名和rhd文件名相同
@@ -1100,7 +1198,8 @@ def single_electrode_analysis(RecordingPath,j):
     recording_time.replace(tzinfo=tz_utc_8)
     recording_date = recording_time.replace(hour=0,minute=0,second=0)
     ##读取recording
-    recording = get_recording(RecordingPath)
+    
+    recording,RecordingSystem = get_recording(RecordingPath)
     ## 从文件名判断有几个电极同时测试
     if Electrodes.count('&'):
         ElectrodesList = Electrodes.split('&')
@@ -1110,6 +1209,7 @@ def single_electrode_analysis(RecordingPath,j):
     # get meta data
     species, Probe_version,FPC_version = get_meta_info(ElectrodesList[j])
     probe = Probe_version
+    lab = 'stairmed'
     index_dict = {'Animal': ElectrodesList[j], 'Lab': lab, 
                         'Implant_batch':1,
                         'Recording_date':recording_date,
@@ -1249,16 +1349,18 @@ def single_electrode_analysis(RecordingPath,j):
 
 
 ## 对于单个文件夹中的rhd文件：
-def single_rhd_file_analysis(RecordingPath):
+def single_recording_file_analysis(RecordingPath):
     #在程序所在位置建立临时存储recording文件的位置，文件夹命名和rhd文件名相同
     # pre_path = SSDPath/(rhdFiles[0].stem)
     ## 节省空间改成相同的文件路径，不支持同时运行若干程序
-    pre_path = SSDPath
-    DateFolder = RecordingPath.parent
-    RecordingSystem = 'Intan'
-    ## 读取recording
-    recording = get_recording(RecordingPath)
-    ElectrodesList,IMPD,recording_time = get_rhd_meta(RecordingPath)
+    # pre_path = SSDPath
+    # DateFolder = RecordingPath.parent
+    # RecordingSystem = 'Intan'
+    # ## 读取recording
+    # recording = get_recording(RecordingPath)
+    RecordingSystem = get_recording_system(RecordingPath)
+    print(RecordingSystem)
+    ElectrodesList,IMPD,recording_time = get_recording_meta(RecordingPath,RecordingSystem)
     
 
     
